@@ -1,13 +1,15 @@
-from py_ecc.bn128 import is_on_curve, FQ
+from py_ecc.bn128 import FQ, is_on_curve
 from py_ecc.fields import field_properties
+
 field_mod = field_properties["bn128"]["field_modulus"]
 from hashlib import sha256
+
 from libnum import has_sqrtmod_prime_power, sqrtmod_prime_power
 
-b = 3 # for bn128, y^2 = x^3 + 3
+b = 3  # for bn128, y^2 = x^3 + 3
 seed = "RareSkills"
 
-x = int(sha256(seed.encode('ascii')).hexdigest(), 16) % field_mod 
+x = int(sha256(seed.encode("ascii")).hexdigest(), 16) % field_mod
 
 entropy = 0
 
@@ -25,5 +27,5 @@ assert is_on_curve(point, b), "sanity check"
 vector_basis.append(point)
 
 # new x value
-x = int(sha256(str(x).encode('ascii')).hexdigest(), 16) % field_mod 
+x = int(sha256(str(x).encode("ascii")).hexdigest(), 16) % field_mod
 print(vector_basis)

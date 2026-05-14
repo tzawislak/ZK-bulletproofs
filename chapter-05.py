@@ -1,12 +1,11 @@
 import random
 from functools import reduce
 
-import numpy as np
 from py_ecc.bn128 import FQ, Z1, add, eq, multiply
 from py_ecc.bn128 import curve_order as p
 
 
-def random_element():
+def rand():
     return random.randint(0, p)
 
 
@@ -18,6 +17,13 @@ def add_points(*points):
 # aG1 + bG2 + cG3 + dG4
 def vector_commit(points, scalars):
     return reduce(add, [multiply(P, i) for P, i in zip(points, scalars)], Z1)
+
+
+def inner(a, b):
+    res = 0
+    for ai, bi in zip(a, b):
+        res += ai * bi
+    return res % p
 
 
 # these EC points have unknown discrete logs:
@@ -89,6 +95,8 @@ H = [
     ),
 ]
 
+F = G[0]  # another point for v
+
 B = (
     FQ(12848606535045587128788889317230751518392478691112375569775390095112330602489),
     FQ(18818936887558347291494629972517132071247847502517774285883500818572856935411),
@@ -100,57 +108,74 @@ B = (
 
 # remember to do all arithmetic modulo p
 def commit(a, sL, b, sR, alpha, beta, gamma, tau_1, tau_2):
-    pass
-    # return (A, S, V, T1, T2)
+
+    A = add(add_points(vector_commit(G, a)), add_points(vector_commit(H, b)))
+    A = add(A, multiply(B, alpha))
+    S = add(add_points(vector_commit(G, sL)), add_points(vector_commit(H, sR)))
+    S = add(S, multiply(B, beta))
+    V = add(multiply(F, (inner(a, b))), multiply(B, gamma))
+    T1 = add(multiply(F, (inner(a, sR) + inner(b, sL))), multiply(B, tau_1))
+    T2 = add(multiply(F, inner(sL, sR)), multiply(B, tau_2))
+    return A, S, V, T1, T2
 
 
 def evaluate(f_0, f_1, f_2, u):
-    return (f_0 + f_1 * u + f_2 * u**2) % p
+
+    if type(f_0) is list:
+        res = []
+        for l in range(len(f_0)):
+            res.append((f_0[l] + f_1[l] * u + f_2 * u**2) % p)
+
+        return res
+
+    elif type(f_0) is int:
+        return (f_0 + f_1 * u + f_2 * u**2) % p
+    else:
+        return -1
 
 
 def prove(blinding_0, blinding_1, blinding_2, u):
-    # fill this in
-    # return pi
-    pass
+    pi = blinding_0 + blinding_1 * u + blinding_2 * u**2
+    return pi % p
 
 
 ## step 0: Prover and verifier agree on G and B
 
 ## step 1: Prover creates the commitments
-a = np.array([89, 15, 90, 22])
-b = np.array([16, 18, 54, 12])
-sL = ...
-sR = ...
-t1 = ...
-t2 = ...
-
+a = [14, 12, 21, 23]
+b = [32, 14, 991, 24]
+sL = [rand() for i in range(4)]
+sR = [rand() for i in range(4)]
+t1 = inner(a, sR) + inner(b, sL)
+t2 = inner(sR, sL)
 ### blinding terms
-alpha = ...
-beta = ...
-gamma = ...
-tau_1 = ...
-tau_2 = ...
+alpha = rand()
+beta = rand()
+gamma = rand()
+tau_1 = rand()
+tau_2 = rand()
 
 A, S, V, T1, T2 = commit(a, sL, b, sR, alpha, beta, gamma, tau_1, tau_2)
 
 ## step 2: Verifier picks u
-u = ...
+u = rand()
 
 ## step 3: Prover evaluates l(u), r(u), t(u) and creates evaluation proofs
 l_u = evaluate(a, sL, 0, u)
 r_u = evaluate(b, sR, 0, u)
-t_u = evaluate(np.inner(a, b), t1, t2, u)
+t_u = evaluate(inner(a, b), t1, t2, u)
 
 pi_lr = prove(alpha, beta, 0, u)
 pi_t = prove(gamma, tau_1, tau_2, u)
 
 ## step 4: Verifier accepts or rejects
-assert t_u == np.mod(np.inner(np.array(l_u), np.array(r_u)), p), "tu !=〈lu, ru〉"
+assert t_u == inner(l_u, r_u), "tu !=<lu, ru>"
 assert eq(
-    add(A, commit(S, u)),
+    add(A, multiply(S, u)),
     add_points(vector_commit(G, l_u), vector_commit(H, r_u), multiply(B, pi_lr)),
 ), "l_u or r_u not evaluated correctly"
 assert eq(
-    add(multiply(G, t_u), multiply(B, pi_t)),
+    add(multiply(F, t_u), multiply(B, pi_t)),
     add_points(V, multiply(T1, u), multiply(T2, u**2 % p)),
 ), "t_u not evaluated correctly"
+print("OK")
